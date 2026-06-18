@@ -21,6 +21,12 @@ Commit 2 includes:
 - Authenticated Socket.io handshakes via `auth.token` or `Authorization: Bearer`.
 - In-process user connection registry and per-user socket rooms.
 
+Commit 3 includes:
+
+- Prisma notification schema and migration.
+- Database-backed notification creation, listing, and read marking.
+- Zod request validation for notification persistence endpoints.
+
 ## Local Development
 
 ```bash
@@ -51,6 +57,24 @@ Check the authenticated user:
 
 ```bash
 curl http://localhost:3000/auth/me \
+  -H "Authorization: Bearer <access-token>"
+```
+
+## Notifications
+
+Create a persisted notification:
+
+```bash
+curl -X POST http://localhost:3000/notifications \
+  -H "Authorization: Bearer <access-token>" \
+  -H "Content-Type: application/json" \
+  -d "{\"recipientId\":\"user_123\",\"type\":\"USER\",\"title\":\"Hello\",\"body\":\"You have a new message\"}"
+```
+
+List notifications for the authenticated user:
+
+```bash
+curl http://localhost:3000/notifications/me \
   -H "Authorization: Bearer <access-token>"
 ```
 

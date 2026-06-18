@@ -2,12 +2,15 @@ import { createServer } from "node:http";
 import { env } from "./config/env.js";
 import { logger } from "./config/logger.js";
 import { createApp } from "./http/app.js";
+import { NotificationService } from "./notifications/notification.service.js";
+import { prisma } from "./config/prisma.js";
 import { ConnectionRegistry } from "./realtime/connection-registry.js";
 import { createSocketServer } from "./realtime/socket.js";
 
 async function bootstrap(): Promise<void> {
   const connectionRegistry = new ConnectionRegistry();
-  const app = createApp(connectionRegistry);
+  const notificationService = new NotificationService(prisma);
+  const app = createApp(connectionRegistry, notificationService);
   const httpServer = createServer(app);
   const io = await createSocketServer(httpServer, connectionRegistry);
 
@@ -18,6 +21,7 @@ async function bootstrap(): Promise<void> {
   const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
     logger.info("Shutdown requested", { signal });
     io.close();
+    await prisma.$disconnect();
     httpServer.close((error?: Error) => {
       if (error) {
         logger.error("HTTP server closed with error", { error });

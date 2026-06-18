@@ -1,0 +1,86 @@
+import { Router, type Request } from "express";
+import { requireAuth, type AuthenticatedRequest } from "../auth/http-auth.js";
+import {
+  createNotificationSchema,
+  listNotificationsQuerySchema,
+  markNotificationReadSchema
+} from "./notification.schemas.js";
+import type { NotificationService } from "./notification.service.js";
+
+function getAuthUser(req: Request) {
+  return (req as unknown as AuthenticatedRequest).user;
+}
+
+export function createNotificationRouter(notificationService: NotificationService): Router {
+  const router = Router();
+
+  router.use(requireAuth);
+
+  router.post("/", async (req, res, next) => {
+    const result = createNotificationSchema.safeParse(req.body);
+
+    if (!result.success) {
+      res.status(400).json({
+        error: "Invalid notification payload",
+        details: result.error.flatten()
+      });
+      return;
+    }
+
+    try {
+      const notification = await notificationService.create(result.data);
+      res.status(201).json({ notification });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/me", async (req, res, next) => {
+    const query = listNotificationsQuerySchema.safeParse(req.query);
+
+    if (!query.success) {
+      res.status(400).json({
+        error: "Invalid notification query",
+        details: query.error.flatten()
+      });
+      return;
+    }
+
+    try {
+      const user = getAuthUser(req);
+      const page = await notificationService.listForRecipient(user.id, query.data);
+
+      res.status(200).json(page);
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.patch("/:notificationId/read", async (req, res, next) => {
+    const params = markNotificationReadSchema.safeParse(req.params);
+
+    if (!params.success) {
+      res.status(400).json({
+        error: "Invalid notification id",
+        details: params.error.flatten()
+      });
+      return;
+    }
+
+    try {
+      const user = getAuthUser(req);
+      const notification = await notificationService.markRead(params.data.notificationId, user.id);
+
+      if (!notification) {
+        res.status(404).json({ error: "Notification not found" });
+        return;
+      }
+
+      res.status(200).json({ notification });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  return router;
+}

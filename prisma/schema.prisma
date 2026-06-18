@@ -6,3 +6,35 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+enum NotificationType {
+  USER
+  EVENT
+  SYSTEM
+}
+
+enum NotificationStatus {
+  PENDING
+  DELIVERED
+  READ
+  FAILED
+}
+
+model Notification {
+  id          String             @id @default(uuid())
+  recipientId String
+  type        NotificationType
+  status      NotificationStatus @default(PENDING)
+  title       String
+  body        String
+  data        Json?
+  templateKey String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  deliveredAt DateTime?
+  readAt      DateTime?
+
+  @@index([recipientId, createdAt])
+  @@index([recipientId, status])
+  @@index([type])
+}
