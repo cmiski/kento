@@ -27,6 +27,12 @@ Commit 3 includes:
 - Database-backed notification creation, listing, and read marking.
 - Zod request validation for notification persistence endpoints.
 
+Commit 4 includes:
+
+- Redis Pub/Sub notification event bus.
+- Notification creation events published after database persistence.
+- Socket.io delivery to per-user rooms through Redis-backed horizontal fanout.
+
 ## Local Development
 
 ```bash
@@ -81,3 +87,9 @@ curl http://localhost:3000/notifications/me \
 ## Socket Smoke Test
 
 Clients can connect with Socket.io using websocket or polling transports. Pass the JWT as `auth.token` or an `Authorization: Bearer` header. On connection the server emits `server:welcome`; clients can send `ping:client` with an acknowledgement callback.
+
+When a notification is created for the connected user, the server emits:
+
+```text
+notification:new
+```

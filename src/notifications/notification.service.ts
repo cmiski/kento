@@ -1,11 +1,15 @@
 import { Prisma, type Notification, type PrismaClient } from "@prisma/client";
 import type { CreateNotificationInput, ListNotificationsQuery } from "./notification.schemas.js";
+import type { NotificationEventPublisher } from "./notification-events.js";
 
 export class NotificationService {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly events: NotificationEventPublisher
+  ) {}
 
   async create(input: CreateNotificationInput): Promise<Notification> {
-    return this.prisma.notification.create({
+    const notification = await this.prisma.notification.create({
       data: {
         recipientId: input.recipientId,
         type: input.type,
@@ -15,6 +19,10 @@ export class NotificationService {
         templateKey: input.templateKey
       }
     });
+
+    await this.events.publishCreated(notification);
+
+    return notification;
   }
 
   async listForRecipient(recipientId: string, query: ListNotificationsQuery): Promise<{

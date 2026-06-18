@@ -5,14 +5,20 @@ import { createApp } from "./http/app.js";
 import { NotificationService } from "./notifications/notification.service.js";
 import { prisma } from "./config/prisma.js";
 import { ConnectionRegistry } from "./realtime/connection-registry.js";
+import { NotificationDispatcher } from "./realtime/notification-dispatcher.js";
 import { createSocketServer } from "./realtime/socket.js";
+import { RedisNotificationEvents } from "./notifications/redis-notification-events.js";
 
 async function bootstrap(): Promise<void> {
   const connectionRegistry = new ConnectionRegistry();
-  const notificationService = new NotificationService(prisma);
+  const notificationEvents = new RedisNotificationEvents();
+  const notificationService = new NotificationService(prisma, notificationEvents);
   const app = createApp(connectionRegistry, notificationService);
   const httpServer = createServer(app);
   const io = await createSocketServer(httpServer, connectionRegistry);
+  const notificationDispatcher = new NotificationDispatcher(io);
+
+  await notificationEvents.start((event) => notificationDispatcher.dispatchCreated(event));
 
   httpServer.listen(env.PORT, () => {
     logger.info("HTTP and Socket.io server listening", { port: env.PORT });
@@ -21,6 +27,7 @@ async function bootstrap(): Promise<void> {
   const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
     logger.info("Shutdown requested", { signal });
     io.close();
+    await notificationEvents.stop();
     await prisma.$disconnect();
     httpServer.close((error?: Error) => {
       if (error) {
