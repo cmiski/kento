@@ -33,6 +33,15 @@ Commit 4 includes:
 - Notification creation events published after database persistence.
 - Socket.io delivery to per-user rooms through Redis-backed horizontal fanout.
 
+Additional capabilities include:
+
+- Offline delivery queue using persisted `PENDING` notifications.
+- Reconnect delivery for pending notifications.
+- Socket acknowledgement based delivery marking.
+- Redis-backed presence tracking.
+- Protected presence query endpoints.
+- Redis-backed per-user HTTP rate limiting.
+
 ## Local Development
 
 ```bash
@@ -92,4 +101,30 @@ When a notification is created for the connected user, the server emits:
 
 ```text
 notification:new
+```
+
+Clients should acknowledge received notifications:
+
+```ts
+socket.on("notification:new", (payload, ack) => {
+  ack({ ok: true });
+});
+```
+
+Notifications remain `PENDING` until at least one local socket acknowledgement is received, then they are marked `DELIVERED`.
+
+## Presence
+
+Check a user's presence:
+
+```bash
+curl http://localhost:3000/presence/users/user_123 \
+  -H "Authorization: Bearer <access-token>"
+```
+
+List online user ids:
+
+```bash
+curl http://localhost:3000/presence/online \
+  -H "Authorization: Bearer <access-token>"
 ```

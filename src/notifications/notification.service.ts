@@ -74,4 +74,41 @@ export class NotificationService {
       }
     });
   }
+
+  async listPendingForRecipient(recipientId: string, limit: number): Promise<Notification[]> {
+    return this.prisma.notification.findMany({
+      where: {
+        recipientId,
+        status: "PENDING"
+      },
+      orderBy: {
+        createdAt: "asc"
+      },
+      take: limit
+    });
+  }
+
+  async markDelivered(notificationId: string, recipientId: string): Promise<Notification | null> {
+    const notification = await this.prisma.notification.findFirst({
+      where: {
+        id: notificationId,
+        recipientId,
+        status: "PENDING"
+      }
+    });
+
+    if (!notification) {
+      return null;
+    }
+
+    return this.prisma.notification.update({
+      where: {
+        id: notification.id
+      },
+      data: {
+        status: "DELIVERED",
+        deliveredAt: new Date()
+      }
+    });
+  }
 }

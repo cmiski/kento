@@ -1,5 +1,5 @@
 import { Router, type Request } from "express";
-import { requireAuth, type AuthenticatedRequest } from "../auth/http-auth.js";
+import type { AuthenticatedRequest } from "../auth/http-auth.js";
 import {
   createNotificationSchema,
   listNotificationsQuerySchema,
@@ -13,8 +13,6 @@ function getAuthUser(req: Request) {
 
 export function createNotificationRouter(notificationService: NotificationService): Router {
   const router = Router();
-
-  router.use(requireAuth);
 
   router.post("/", async (req, res, next) => {
     const result = createNotificationSchema.safeParse(req.body);

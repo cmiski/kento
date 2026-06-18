@@ -7,11 +7,17 @@ import { createAuthRouter } from "../auth/auth.routes.js";
 import { requireAuth, type AuthenticatedRequest } from "../auth/http-auth.js";
 import { createNotificationRouter } from "../notifications/notification.routes.js";
 import type { NotificationService } from "../notifications/notification.service.js";
+import { createPresenceRouter } from "../presence/presence.routes.js";
+import type { PresenceService } from "../presence/presence.service.js";
+import { createUserRateLimiter } from "./rate-limit.js";
 import { errorHandler } from "./error-handler.js";
+import type Redis from "ioredis";
 
 export function createApp(
   connectionRegistry: ConnectionRegistry,
-  notificationService: NotificationService
+  notificationService: NotificationService,
+  presenceService: PresenceService,
+  rateLimitRedis: Redis
 ): Express {
   const app = express();
 
@@ -32,9 +38,11 @@ export function createApp(
   });
 
   app.use("/auth", createAuthRouter());
-  app.use("/notifications", createNotificationRouter(notificationService));
+  const userRateLimiter = createUserRateLimiter(rateLimitRedis);
+  app.use("/notifications", requireAuth, userRateLimiter, createNotificationRouter(notificationService));
+  app.use("/presence", requireAuth, userRateLimiter, createPresenceRouter(presenceService));
 
-  app.get("/connections/me", requireAuth, (req, res) => {
+  app.get("/connections/me", requireAuth, userRateLimiter, (req, res) => {
     const user = (req as AuthenticatedRequest).user;
 
     res.status(200).json(connectionRegistry.snapshotForUser(user.id));
