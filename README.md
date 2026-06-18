@@ -14,6 +14,13 @@ Commit 1 includes:
 - Environment validation with Zod.
 - JSON logging with Winston.
 
+Commit 2 includes:
+
+- JWT access token issuing and verification.
+- Protected HTTP auth middleware.
+- Authenticated Socket.io handshakes via `auth.token` or `Authorization: Bearer`.
+- In-process user connection registry and per-user socket rooms.
+
 ## Local Development
 
 ```bash
@@ -30,6 +37,23 @@ docker compose up --build
 
 The API listens on `http://localhost:3000`.
 
+## Authentication
+
+Issue a development access token:
+
+```bash
+curl -X POST http://localhost:3000/auth/token \
+  -H "Content-Type: application/json" \
+  -d "{\"email\":\"user@example.com\",\"userId\":\"user_123\"}"
+```
+
+Check the authenticated user:
+
+```bash
+curl http://localhost:3000/auth/me \
+  -H "Authorization: Bearer <access-token>"
+```
+
 ## Socket Smoke Test
 
-Clients can connect with Socket.io using websocket or polling transports. On connection the server emits `server:welcome`; clients can send `ping:client` with an acknowledgement callback.
+Clients can connect with Socket.io using websocket or polling transports. Pass the JWT as `auth.token` or an `Authorization: Bearer` header. On connection the server emits `server:welcome`; clients can send `ping:client` with an acknowledgement callback.

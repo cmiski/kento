@@ -2,12 +2,14 @@ import { createServer } from "node:http";
 import { env } from "./config/env.js";
 import { logger } from "./config/logger.js";
 import { createApp } from "./http/app.js";
+import { ConnectionRegistry } from "./realtime/connection-registry.js";
 import { createSocketServer } from "./realtime/socket.js";
 
 async function bootstrap(): Promise<void> {
-  const app = createApp();
+  const connectionRegistry = new ConnectionRegistry();
+  const app = createApp(connectionRegistry);
   const httpServer = createServer(app);
-  const io = await createSocketServer(httpServer);
+  const io = await createSocketServer(httpServer, connectionRegistry);
 
   httpServer.listen(env.PORT, () => {
     logger.info("HTTP and Socket.io server listening", { port: env.PORT });

@@ -4,8 +4,13 @@ import { type Server as HttpServer } from "node:http";
 import { Server } from "socket.io";
 import { env } from "../config/env.js";
 import { logger } from "../config/logger.js";
+import { authenticateSocket } from "./socket-auth.js";
+import type { ConnectionRegistry } from "./connection-registry.js";
 
-export async function createSocketServer(httpServer: HttpServer): Promise<Server> {
+export async function createSocketServer(
+  httpServer: HttpServer,
+  connectionRegistry: ConnectionRegistry
+): Promise<Server> {
   const io = new Server(httpServer, {
     cors: {
       origin: env.CORS_ORIGIN === "*" ? true : env.CORS_ORIGIN,
@@ -22,12 +27,22 @@ export async function createSocketServer(httpServer: HttpServer): Promise<Server
 
   await Promise.all([pubClient.connect(), subClient.connect()]);
   io.adapter(createAdapter(pubClient, subClient));
+  io.use(authenticateSocket);
 
   io.on("connection", (socket) => {
-    logger.info("Socket connected", { socketId: socket.id });
+    const connection = connectionRegistry.add(socket.id, socket.data.user);
+    const userRoom = `user:${connection.user.id}`;
+    socket.join(userRoom);
+
+    logger.info("Socket connected", {
+      socketId: socket.id,
+      userId: connection.user.id,
+      socketsForUser: connectionRegistry.getUserSocketCount(connection.user.id)
+    });
 
     socket.emit("server:welcome", {
       socketId: socket.id,
+      userId: connection.user.id,
       message: "Connected to realtime-notification-hub"
     });
 
@@ -37,7 +52,15 @@ export async function createSocketServer(httpServer: HttpServer): Promise<Server
     });
 
     socket.on("disconnect", (reason) => {
-      logger.info("Socket disconnected", { socketId: socket.id, reason });
+      const removedConnection = connectionRegistry.remove(socket.id);
+      logger.info("Socket disconnected", {
+        socketId: socket.id,
+        userId: removedConnection?.user.id,
+        reason,
+        socketsForUser: removedConnection
+          ? connectionRegistry.getUserSocketCount(removedConnection.user.id)
+          : 0
+      });
     });
   });
 
