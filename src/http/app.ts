@@ -1,6 +1,7 @@
 import cors from "cors";
 import express, { type Express } from "express";
 import helmet from "helmet";
+import swaggerUi from "swagger-ui-express";
 import { env } from "../config/env.js";
 import type { ConnectionRegistry } from "../realtime/connection-registry.js";
 import { createAuthRouter } from "../auth/auth.routes.js";
@@ -11,6 +12,7 @@ import { createPresenceRouter } from "../presence/presence.routes.js";
 import type { PresenceService } from "../presence/presence.service.js";
 import { createUserRateLimiter } from "./rate-limit.js";
 import { errorHandler } from "./error-handler.js";
+import { openApiDocument } from "./openapi.js";
 import type Redis from "ioredis";
 
 export function createApp(
@@ -36,6 +38,12 @@ export function createApp(
       service: "realtime-notification-hub"
     });
   });
+
+  app.get("/openapi.json", (_req, res) => {
+    res.status(200).json(openApiDocument);
+  });
+
+  app.use("/docs", swaggerUi.serve, swaggerUi.setup(openApiDocument));
 
   app.use("/auth", createAuthRouter());
   const userRateLimiter = createUserRateLimiter(rateLimitRedis);
