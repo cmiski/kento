@@ -1,0 +1,9 @@
+process.env.NODE_ENV = "test";
+process.env.DATABASE_URL = "postgresql://postgres:postgres@localhost:5432/realtime_notification_hub_test";
+process.env.REDIS_URL = "redis://localhost:6379";
+process.env.JWT_SECRET = "test-secret-with-32-characters";
+process.env.LOG_LEVEL = "error";
+process.env.USER_RATE_LIMIT_MAX_REQUESTS = "2";
+process.env.USER_RATE_LIMIT_WINDOW_SECONDS = "60";
+process.env.NOTIFICATION_DELIVERY_TIMEOUT_MS = "5";
+process.env.PRESENCE_TTL_SECONDS = "120";
