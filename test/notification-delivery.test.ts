@@ -26,7 +26,7 @@ function createDelivery(ackResponses: Array<{ ok: boolean }> | Error) {
   });
   const timeout = vi.fn(() => ({ emitWithAck }));
   const to = vi.fn(() => ({ timeout }));
-  const io = { local: { to } };
+  const io = { to };
   const notificationService = {
     listPendingForRecipient: vi.fn(async () => [notification]),
     markDelivered: vi.fn(async () => ({ ...notification, status: "DELIVERED" }))
@@ -50,7 +50,7 @@ describe("NotificationDelivery", () => {
       notification: notification as never
     });
 
-    expect(io.local.to).toHaveBeenCalledWith("user:user_1");
+    expect(io.to).toHaveBeenCalledWith("user:user_1");
     expect(notificationService.markDelivered).toHaveBeenCalledWith(notification.id, "user_1");
   });
 
@@ -71,7 +71,7 @@ describe("NotificationDelivery", () => {
 
     await delivery.deliverPendingForUser("user_1");
 
-    expect(notificationService.listPendingForRecipient).toHaveBeenCalledWith("user_1", 50);
+    expect(notificationService.listPendingForRecipient).toHaveBeenCalledWith("user_1", 50, undefined);
     expect(emitWithAck).toHaveBeenCalledWith(
       "notification:new",
       expect.objectContaining({
@@ -79,5 +79,28 @@ describe("NotificationDelivery", () => {
         notification
       })
     );
+  });
+
+  it("replays every page of a large pending backlog", async () => {
+    const { delivery, notificationService } = createDelivery([{ ok: true }]);
+    const firstPage = Array.from({ length: 50 }, (_, index) => ({
+      ...notification,
+      id: `notification_${index}`
+    }));
+    const lastNotification = { ...notification, id: "notification_50" };
+    notificationService.listPendingForRecipient
+      .mockResolvedValueOnce(firstPage)
+      .mockResolvedValueOnce([lastNotification]);
+
+    await delivery.deliverPendingForUser("user_1");
+
+    expect(notificationService.listPendingForRecipient).toHaveBeenNthCalledWith(1, "user_1", 50, undefined);
+    expect(notificationService.listPendingForRecipient).toHaveBeenNthCalledWith(
+      2,
+      "user_1",
+      50,
+      "notification_49"
+    );
+    expect(notificationService.markDelivered).toHaveBeenCalledTimes(51);
   });
 });

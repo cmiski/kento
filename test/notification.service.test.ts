@@ -123,4 +123,21 @@ describe("NotificationService", () => {
       })
     });
   });
+
+  it("skips the cursor notification when listing the next page", async () => {
+    const { service, prisma } = createService();
+    prisma.notification.findMany.mockResolvedValue([baseNotification]);
+
+    await service.listForRecipient("user_1", {
+      limit: 25,
+      cursor: baseNotification.id
+    });
+
+    expect(prisma.notification.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cursor: { id: baseNotification.id },
+        skip: 1
+      })
+    );
+  });
 });

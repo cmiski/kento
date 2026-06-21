@@ -20,18 +20,25 @@ export class NotificationDelivery {
   }
 
   async deliverPendingForUser(userId: string): Promise<void> {
-    const pending = await this.notificationService.listPendingForRecipient(userId, 50);
+    const batchSize = 50;
+    let cursor: string | undefined;
 
-    for (const notification of pending) {
-      await this.deliverNotification(notification, `pending:${notification.id}`, new Date().toISOString());
-    }
+    do {
+      const pending = await this.notificationService.listPendingForRecipient(userId, batchSize, cursor);
+
+      for (const notification of pending) {
+        await this.deliverNotification(notification, `pending:${notification.id}`, new Date().toISOString());
+      }
+
+      cursor = pending.length === batchSize ? pending.at(-1)?.id : undefined;
+    } while (cursor);
   }
 
   private async deliverNotification(notification: Notification, eventId: string, occurredAt: string): Promise<void> {
     const room = `user:${notification.recipientId}`;
 
     try {
-      const responses = await this.io.local
+      const responses = await this.io
         .to(room)
         .timeout(env.NOTIFICATION_DELIVERY_TIMEOUT_MS)
         .emitWithAck("notification:new", {

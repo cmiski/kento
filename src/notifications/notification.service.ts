@@ -141,16 +141,16 @@ export class NotificationService {
     });
   }
 
-  async listPendingForRecipient(recipientId: string, limit: number): Promise<Notification[]> {
+  async listPendingForRecipient(recipientId: string, limit: number, cursor?: string): Promise<Notification[]> {
     return this.prisma.notification.findMany({
       where: {
         recipientId,
         status: "PENDING"
       },
-      orderBy: {
-        createdAt: "asc"
-      },
-      take: limit
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      take: limit,
+      cursor: cursor ? { id: cursor } : undefined,
+      skip: cursor ? 1 : undefined
     });
   }
 
@@ -226,7 +226,8 @@ export class NotificationService {
       where: args.where,
       orderBy: args.orderBy,
       take: args.limit + 1,
-      cursor: args.cursor ? { id: args.cursor } : undefined
+      cursor: args.cursor ? { id: args.cursor } : undefined,
+      skip: args.cursor ? 1 : undefined
     });
 
     const hasNextPage = items.length > args.limit;
