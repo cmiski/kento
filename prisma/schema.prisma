@@ -20,6 +20,30 @@ enum NotificationStatus {
   FAILED
 }
 
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  PUSH
+  SMS
+}
+
+enum DeliveryStatus {
+  QUEUED
+  PROCESSING
+  DELIVERED
+  RETRYING
+  FAILED
+  DEAD_LETTER
+  SKIPPED
+}
+
+enum DeliveryJobStatus {
+  AVAILABLE
+  PROCESSING
+  COMPLETED
+  DEAD_LETTER
+}
+
 model Notification {
   id          String             @id @default(uuid())
   recipientId String
@@ -29,12 +53,98 @@ model Notification {
   body        String
   data        Json?
   templateKey String?
+  templateVersion Int?
+  idempotencyKey String?            @unique
+  scheduledAt DateTime?
+  channels    NotificationChannel[] @default([IN_APP])
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
   deliveredAt DateTime?
   readAt      DateTime?
+  deliveries  NotificationDelivery[]
 
   @@index([recipientId, createdAt])
   @@index([recipientId, status])
   @@index([type])
+}
+
+model ChannelPreference {
+  id          String              @id @default(uuid())
+  userId      String
+  channel     NotificationChannel
+  enabled     Boolean             @default(true)
+  destination String?
+  metadata    Json?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@unique([userId, channel])
+  @@index([userId])
+}
+
+model NotificationTemplate {
+  id        String              @id @default(uuid())
+  key       String
+  version   Int
+  channel   NotificationChannel
+  title     String
+  body      String
+  active    Boolean             @default(true)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  @@unique([key, version, channel])
+  @@index([key, active])
+}
+
+model NotificationDelivery {
+  id                String              @id @default(uuid())
+  notificationId    String
+  channel           NotificationChannel
+  status            DeliveryStatus      @default(QUEUED)
+  attemptCount      Int                 @default(0)
+  maxAttempts       Int                 @default(5)
+  nextAttemptAt     DateTime
+  providerMessageId String?
+  lastError         String?
+  deliveredAt       DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  notification      Notification        @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  attempts          DeliveryAttempt[]
+  job               DeliveryJob?
+
+  @@unique([notificationId, channel])
+  @@index([status, nextAttemptAt])
+}
+
+model DeliveryAttempt {
+  id                String         @id @default(uuid())
+  deliveryId        String
+  attemptNumber     Int
+  status            DeliveryStatus
+  providerMessageId String?
+  error             String?
+  metadata          Json?
+  startedAt         DateTime       @default(now())
+  finishedAt        DateTime?
+  delivery          NotificationDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  @@unique([deliveryId, attemptNumber])
+  @@index([deliveryId, startedAt])
+}
+
+model DeliveryJob {
+  id          String            @id @default(uuid())
+  deliveryId  String            @unique
+  status      DeliveryJobStatus @default(AVAILABLE)
+  runAt       DateTime
+  lockedAt    DateTime?
+  lockedBy    String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  delivery    NotificationDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+
+  @@index([status, runAt])
+  @@index([status, lockedAt])
 }

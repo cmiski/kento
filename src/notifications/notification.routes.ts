@@ -3,11 +3,14 @@ import type { AuthenticatedRequest } from "../auth/http-auth.js";
 import {
   adminListNotificationsQuerySchema,
   createNotificationSchema,
+  createTemplateDefinitionSchema,
   createTemplateNotificationSchema,
+  listTemplateDefinitionsQuerySchema,
   listNotificationsQuerySchema,
   markNotificationReadSchema,
   notificationIdParamSchema,
   simulatePushSchema,
+  updateChannelPreferencesSchema,
   updateNotificationStatusSchema
 } from "./notification.schemas.js";
 import type { NotificationService } from "./notification.service.js";
@@ -71,6 +74,66 @@ export function createNotificationRouter(notificationService: NotificationServic
     try {
       const notification = await notificationService.createFromTemplate(result.data);
       res.status(201).json({ notification });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/preferences", async (req, res, next) => {
+    try {
+      const preferences = await notificationService.getPreferences(getAuthUser(req).id);
+      res.status(200).json({ preferences });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.put("/preferences", async (req, res, next) => {
+    const body = updateChannelPreferencesSchema.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: "Invalid channel preferences", details: body.error.flatten() });
+      return;
+    }
+
+    try {
+      const preferences = await notificationService.updatePreferences(getAuthUser(req).id, body.data);
+      res.status(200).json({ preferences });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.post("/template-definitions", async (req, res, next) => {
+    if (!requireAdmin(req, res)) {
+      return;
+    }
+    const body = createTemplateDefinitionSchema.safeParse(req.body);
+    if (!body.success) {
+      res.status(400).json({ error: "Invalid template definition", details: body.error.flatten() });
+      return;
+    }
+
+    try {
+      const template = await notificationService.createTemplateDefinition(body.data);
+      res.status(201).json({ template });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/template-definitions", async (req, res, next) => {
+    if (!requireAdmin(req, res)) {
+      return;
+    }
+    const query = listTemplateDefinitionsQuerySchema.safeParse(req.query);
+    if (!query.success) {
+      res.status(400).json({ error: "Invalid template query", details: query.error.flatten() });
+      return;
+    }
+
+    try {
+      const templates = await notificationService.listTemplateDefinitions(query.data);
+      res.status(200).json({ templates });
     } catch (error) {
       next(error);
     }
@@ -147,6 +210,26 @@ export function createNotificationRouter(notificationService: NotificationServic
         return;
       }
 
+      res.status(200).json({ notification });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  router.get("/:notificationId/deliveries", async (req, res, next) => {
+    const params = notificationIdParamSchema.safeParse(req.params);
+    if (!params.success) {
+      res.status(400).json({ error: "Invalid notification id", details: params.error.flatten() });
+      return;
+    }
+
+    try {
+      const notification = await notificationService.getDeliveryHistory(params.data.notificationId);
+      const user = getAuthUser(req);
+      if (!notification || (notification.recipientId !== user.id && !user.roles.includes("admin"))) {
+        res.status(404).json({ error: "Notification not found" });
+        return;
+      }
       res.status(200).json({ notification });
     } catch (error) {
       next(error);

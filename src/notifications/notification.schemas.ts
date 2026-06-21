@@ -9,6 +9,7 @@ const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
 
 export const notificationTypeSchema = z.enum(["USER", "EVENT", "SYSTEM"]);
 export const notificationStatusSchema = z.enum(["PENDING", "DELIVERED", "READ", "FAILED"]);
+export const notificationChannelSchema = z.enum(["IN_APP", "EMAIL", "PUSH", "SMS"]);
 
 export const notificationTemplateKeySchema = z.enum([
   "welcome",
@@ -23,15 +24,48 @@ export const createNotificationSchema = z.object({
   title: z.string().min(1).max(160),
   body: z.string().min(1).max(4000),
   data: z.record(jsonValueSchema).optional(),
-  templateKey: z.string().min(1).max(120).optional()
+  templateKey: z.string().min(1).max(120).optional(),
+  templateVersion: z.number().int().positive().optional(),
+  channels: z.array(notificationChannelSchema).min(1).max(4).default(["IN_APP"]),
+  idempotencyKey: z.string().min(1).max(200).optional(),
+  scheduledAt: z.coerce.date().optional()
 });
 
 export const createTemplateNotificationSchema = z.object({
   recipientId: z.string().min(1),
   type: notificationTypeSchema.default("SYSTEM"),
-  templateKey: notificationTemplateKeySchema,
+  templateKey: z.string().min(1).max(120),
+  templateVersion: z.number().int().positive().optional(),
+  channels: z.array(notificationChannelSchema).min(1).max(4).default(["IN_APP"]),
+  idempotencyKey: z.string().min(1).max(200).optional(),
+  scheduledAt: z.coerce.date().optional(),
   variables: z.record(z.string().min(1), z.string().max(500)).default({}),
   data: z.record(jsonValueSchema).optional()
+});
+
+export const channelPreferenceSchema = z.object({
+  channel: notificationChannelSchema,
+  enabled: z.boolean(),
+  destination: z.string().min(1).max(500).nullable().optional(),
+  metadata: z.record(jsonValueSchema).optional()
+});
+
+export const updateChannelPreferencesSchema = z.object({
+  preferences: z.array(channelPreferenceSchema).min(1).max(4)
+});
+
+export const createTemplateDefinitionSchema = z.object({
+  key: z.string().min(1).max(120),
+  version: z.number().int().positive(),
+  channel: notificationChannelSchema,
+  title: z.string().min(1).max(160),
+  body: z.string().min(1).max(4000),
+  active: z.boolean().default(true)
+});
+
+export const listTemplateDefinitionsQuerySchema = z.object({
+  key: z.string().min(1).max(120).optional(),
+  channel: notificationChannelSchema.optional()
 });
 
 export const listNotificationsQuerySchema = z.object({
@@ -69,3 +103,6 @@ export type ListNotificationsQuery = z.infer<typeof listNotificationsQuerySchema
 export type AdminListNotificationsQuery = z.infer<typeof adminListNotificationsQuerySchema>;
 export type NotificationStatusUpdate = z.infer<typeof updateNotificationStatusSchema>;
 export type SimulatePushInput = z.infer<typeof simulatePushSchema>;
+export type UpdateChannelPreferencesInput = z.infer<typeof updateChannelPreferencesSchema>;
+export type CreateTemplateDefinitionInput = z.infer<typeof createTemplateDefinitionSchema>;
+export type ListTemplateDefinitionsQuery = z.infer<typeof listTemplateDefinitionsQuerySchema>;

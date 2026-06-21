@@ -24,7 +24,20 @@ function createService() {
       findFirst: vi.fn(),
       findUnique: vi.fn(),
       update: vi.fn()
-    }
+    },
+    channelPreference: {
+      findMany: vi.fn(async () => []),
+      upsert: vi.fn()
+    },
+    notificationTemplate: {
+      findFirst: vi.fn(async () => null),
+      findMany: vi.fn(),
+      create: vi.fn(),
+      updateMany: vi.fn()
+    },
+    $transaction: vi.fn(async (operations) =>
+      typeof operations === "function" ? operations(prisma) : Promise.all(operations)
+    )
   };
   const events = {
     publishCreated: vi.fn(async () => undefined)
@@ -53,10 +66,56 @@ describe("NotificationService", () => {
       data: expect.objectContaining({
         recipientId: "user_1",
         title: "Hello",
-        data: { source: "test" }
+        data: { source: "test" },
+        channels: ["IN_APP"],
+        deliveries: {
+          create: [expect.objectContaining({ channel: "IN_APP", status: "QUEUED" })]
+        }
       })
     });
     expect(events.publishCreated).toHaveBeenCalledWith(notification);
+  });
+
+  it("returns an existing notification for a repeated idempotency key", async () => {
+    const { service, prisma, events } = createService();
+    prisma.notification.findUnique.mockResolvedValue(baseNotification);
+
+    const result = await service.create({
+      recipientId: "user_1",
+      type: "USER",
+      title: "Duplicate",
+      body: "Body",
+      channels: ["EMAIL"],
+      idempotencyKey: "request_123"
+    });
+
+    expect(result).toBe(baseNotification);
+    expect(prisma.notification.create).not.toHaveBeenCalled();
+    expect(events.publishCreated).not.toHaveBeenCalled();
+  });
+
+  it("records disabled channel preferences as skipped without queue jobs", async () => {
+    const { service, prisma } = createService();
+    prisma.channelPreference.findMany.mockResolvedValue([{ channel: "SMS", enabled: false }]);
+
+    await service.create({
+      recipientId: "user_1",
+      type: "USER",
+      title: "Hello",
+      body: "Body",
+      channels: ["IN_APP", "SMS"]
+    });
+
+    expect(prisma.notification.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        deliveries: {
+          create: expect.arrayContaining([
+            expect.objectContaining({ channel: "IN_APP", status: "QUEUED" }),
+            expect.objectContaining({ channel: "SMS", status: "SKIPPED", job: undefined })
+          ])
+        }
+      })
+    });
   });
 
   it("renders reusable template notifications before persistence", async () => {

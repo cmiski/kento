@@ -41,7 +41,12 @@ function createTestApp() {
     listForRecipient: vi.fn(async () => ({ items: [notification], nextCursor: null })),
     markRead: vi.fn(async () => ({ ...notification, status: "READ" })),
     updateStatus: vi.fn(async () => ({ ...notification, status: "FAILED" })),
-    simulatePush: vi.fn(async () => ({ ...notification, status: "DELIVERED" }))
+    simulatePush: vi.fn(async () => ({ ...notification, status: "DELIVERED" })),
+    getPreferences: vi.fn(async () => []),
+    updatePreferences: vi.fn(async (_userId, input) => input.preferences),
+    createTemplateDefinition: vi.fn(async (input) => ({ id: "template_1", ...input })),
+    listTemplateDefinitions: vi.fn(async () => []),
+    getDeliveryHistory: vi.fn(async () => ({ ...notification, deliveries: [] }))
   };
   const presenceService = {
     getPresence: vi.fn(async (userId: string) => ({
@@ -148,6 +153,22 @@ describe("HTTP app", () => {
     expect(notificationService.simulatePush).toHaveBeenCalledWith(notification.id, {
       status: "DELIVERED",
       providerMessageId: "push_1"
+    });
+  });
+
+  it("manages authenticated channel preferences", async () => {
+    const { app, notificationService } = createTestApp();
+    const token = await issueToken(app, ["user"]);
+
+    await request(app).get("/notifications/preferences").set("Authorization", `Bearer ${token}`).expect(200);
+    await request(app)
+      .put("/notifications/preferences")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ preferences: [{ channel: "EMAIL", enabled: false }] })
+      .expect(200);
+
+    expect(notificationService.updatePreferences).toHaveBeenCalledWith("user_1", {
+      preferences: [{ channel: "EMAIL", enabled: false }]
     });
   });
 });
