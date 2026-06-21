@@ -6,18 +6,23 @@ import { NotificationService } from "./notifications/notification.service.js";
 import { prisma } from "./config/prisma.js";
 import { ConnectionRegistry } from "./realtime/connection-registry.js";
 import { createSocketServer } from "./realtime/socket.js";
-import { RedisNotificationEvents } from "./notifications/redis-notification-events.js";
 import { createRedisClient } from "./config/redis.js";
 import { PresenceService } from "./presence/presence.service.js";
+import { RedisDeliveryQueue } from "./queue/redis-delivery-queue.js";
+import { DeliveryQueuePublisher } from "./queue/delivery-queue-publisher.js";
+import { DeliveryDispatcher } from "./queue/delivery-dispatcher.js";
+import { DeliveryWorker } from "./queue/delivery-worker.js";
 
 async function bootstrap(): Promise<void> {
   const connectionRegistry = new ConnectionRegistry();
   const presenceRedis = createRedisClient("presence");
   const rateLimitRedis = createRedisClient("rate-limit");
-  await Promise.all([presenceRedis.connect(), rateLimitRedis.connect()]);
+  const deliveryRedis = createRedisClient("delivery-queue");
+  await Promise.all([presenceRedis.connect(), rateLimitRedis.connect(), deliveryRedis.connect()]);
 
   const presenceService = new PresenceService(presenceRedis);
-  const notificationEvents = new RedisNotificationEvents();
+  const deliveryQueue = new RedisDeliveryQueue(deliveryRedis);
+  const notificationEvents = new DeliveryQueuePublisher(prisma, deliveryQueue);
   const notificationService = new NotificationService(prisma, notificationEvents);
   const app = createApp(connectionRegistry, notificationService, presenceService, rateLimitRedis);
   const httpServer = createServer(app);
@@ -28,7 +33,13 @@ async function bootstrap(): Promise<void> {
     presenceService
   );
 
-  await notificationEvents.start((event) => realtime.notificationDelivery.deliverCreated(event));
+  const deliveryWorker = new DeliveryWorker(
+    prisma,
+    deliveryQueue,
+    new DeliveryDispatcher(realtime.notificationDelivery),
+    deliveryRedis
+  );
+  await deliveryWorker.start();
 
   httpServer.listen(env.PORT, () => {
     logger.info("HTTP and Socket.io server listening", { port: env.PORT });
@@ -36,9 +47,9 @@ async function bootstrap(): Promise<void> {
 
   const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
     logger.info("Shutdown requested", { signal });
-    realtime.io.close();
-    await notificationEvents.stop();
-    await Promise.allSettled([presenceRedis.quit(), rateLimitRedis.quit()]);
+    await deliveryWorker.stop();
+    await realtime.close();
+    await Promise.allSettled([presenceRedis.quit(), rateLimitRedis.quit(), deliveryRedis.quit()]);
     await prisma.$disconnect();
     httpServer.close((error?: Error) => {
       if (error) {

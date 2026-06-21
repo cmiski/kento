@@ -12,7 +12,13 @@ const envSchema = z.object({
   NOTIFICATION_DELIVERY_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
   USER_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
   USER_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(120),
-  PRESENCE_TTL_SECONDS: z.coerce.number().int().positive().default(120)
+  PRESENCE_TTL_SECONDS: z.coerce.number().int().positive().default(120),
+  DELIVERY_QUEUE_POLL_MS: z.coerce.number().int().positive().default(250),
+  DELIVERY_QUEUE_RECOVERY_MS: z.coerce.number().int().positive().default(30000),
+  DELIVERY_QUEUE_RECOVERY_BATCH: z.coerce.number().int().positive().default(1000),
+  DELIVERY_JOB_LEASE_MS: z.coerce.number().int().positive().default(60000),
+  DELIVERY_RETRY_BASE_MS: z.coerce.number().int().positive().default(1000),
+  DELIVERY_THROTTLE_PER_MINUTE: z.coerce.number().int().positive().default(60)
 });
 
 export const env = envSchema.parse(process.env);

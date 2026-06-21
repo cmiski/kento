@@ -13,6 +13,7 @@ import type { NotificationService } from "../notifications/notification.service.
 export type RealtimeServer = {
   io: Server;
   notificationDelivery: NotificationDelivery;
+  close(): Promise<void>;
 };
 
 export async function createSocketServer(
@@ -87,6 +88,10 @@ export async function createSocketServer(
 
   return {
     io,
-    notificationDelivery
+    notificationDelivery,
+    async close() {
+      await new Promise<void>((resolve) => io.close(() => resolve()));
+      await Promise.allSettled([pubClient.quit(), subClient.quit()]);
+    }
   };
 }

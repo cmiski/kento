@@ -16,7 +16,10 @@ export class NotificationDelivery {
   ) {}
 
   async deliverCreated(event: NotificationCreatedEvent): Promise<void> {
-    await this.deliverNotification(event.notification, event.eventId, event.occurredAt);
+    const acknowledged = await this.attempt(event.notification, event.eventId, event.occurredAt);
+    if (acknowledged) {
+      await this.notificationService.markDelivered(event.notification.id, event.notification.recipientId);
+    }
   }
 
   async deliverPendingForUser(userId: string): Promise<void> {
@@ -27,14 +30,17 @@ export class NotificationDelivery {
       const pending = await this.notificationService.listPendingForRecipient(userId, batchSize, cursor);
 
       for (const notification of pending) {
-        await this.deliverNotification(notification, `pending:${notification.id}`, new Date().toISOString());
+        const acknowledged = await this.attempt(notification, `pending:${notification.id}`, new Date().toISOString());
+        if (acknowledged) {
+          await this.notificationService.markDelivered(notification.id, notification.recipientId);
+        }
       }
 
       cursor = pending.length === batchSize ? pending.at(-1)?.id : undefined;
     } while (cursor);
   }
 
-  private async deliverNotification(notification: Notification, eventId: string, occurredAt: string): Promise<void> {
+  async attempt(notification: Notification, eventId: string, occurredAt: string): Promise<boolean> {
     const room = `user:${notification.recipientId}`;
 
     try {
@@ -54,16 +60,16 @@ export class NotificationDelivery {
           notificationId: notification.id,
           recipientId: notification.recipientId
         });
-        return;
+        return false;
       }
 
-      await this.notificationService.markDelivered(notification.id, notification.recipientId);
       logger.info("Notification delivery acknowledged", {
         eventId,
         notificationId: notification.id,
         recipientId: notification.recipientId,
         acknowledgements: responses.length
       });
+      return true;
     } catch (error) {
       logger.info("Notification delivery timed out or failed", {
         error,
@@ -71,6 +77,7 @@ export class NotificationDelivery {
         notificationId: notification.id,
         recipientId: notification.recipientId
       });
+      return false;
     }
   }
 }
