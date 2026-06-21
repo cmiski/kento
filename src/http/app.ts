@@ -14,12 +14,14 @@ import { createUserRateLimiter } from "./rate-limit.js";
 import { errorHandler } from "./error-handler.js";
 import { openApiDocument } from "./openapi.js";
 import type Redis from "ioredis";
+import { deliveryMetrics, type DeliveryMetrics } from "../observability/delivery-metrics.js";
 
 export function createApp(
   connectionRegistry: ConnectionRegistry,
   notificationService: NotificationService,
   presenceService: PresenceService,
-  rateLimitRedis: Redis
+  rateLimitRedis: Redis,
+  metrics: DeliveryMetrics = deliveryMetrics
 ): Express {
   const app = express();
 
@@ -41,6 +43,10 @@ export function createApp(
 
   app.get("/openapi.json", (_req, res) => {
     res.status(200).json(openApiDocument);
+  });
+
+  app.get("/metrics", (_req, res) => {
+    res.type("text/plain; version=0.0.4").send(metrics.render());
   });
 
   app.use("/docs", swaggerUi.serve, swaggerUi.setup(openApiDocument));

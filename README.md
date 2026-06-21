@@ -211,3 +211,16 @@ See `.env.example` for the required settings:
 - `NOTIFICATION_DELIVERY_TIMEOUT_MS`: Socket acknowledgement timeout.
 - `USER_RATE_LIMIT_WINDOW_SECONDS` and `USER_RATE_LIMIT_MAX_REQUESTS`: per-user HTTP rate-limit settings.
 - `PRESENCE_TTL_SECONDS`: Redis TTL for presence socket sets and profile data.
+# Delivery pipeline
+
+Notifications can target `IN_APP`, `EMAIL`, `PUSH`, and `SMS`. Email, push, and SMS use provider adapter boundaries in `DeliveryDispatcher`; the included adapter is deterministic simulation and should be replaced with production provider clients. User preferences, versioned templates, per-channel delivery records, and every attempt are persisted in PostgreSQL.
+
+Creation is idempotent when `idempotencyKey` is supplied. A transactional database job is written with each delivery, then published to a Redis sorted-set queue. Workers atomically claim due jobs, enforce recipient/channel throttles, retry transient failures with exponential backoff, and mark exhausted or permanent failures as dead letters. Database-backed claims and leases allow multiple worker replicas and recover work after Redis loss or worker termination.
+
+Prometheus-format metrics are exposed at `GET /metrics`. Alert on a sustained increase in `notification_delivery_outcomes_total{outcome="dead_letter"}`, queue depth growth, and absent delivery throughput. Dead-letter transitions also emit error-level structured logs.
+
+Run unit tests with `npm test`. Run the full PostgreSQL/Redis delivery path after applying migrations with:
+
+```powershell
+$env:RUN_DELIVERY_INTEGRATION='1'; npm test -- --run test/delivery-pipeline.integration.test.ts
+```
