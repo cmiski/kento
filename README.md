@@ -1,4 +1,5 @@
 # realtime-notification-hub
+Intern ID: CITS670
 
 Production-oriented real-time notification hub built with Node.js 20+, TypeScript, Express, Socket.io, Redis, PostgreSQL, Prisma, Zod, Winston, JWT, and Swagger/OpenAPI.
 
